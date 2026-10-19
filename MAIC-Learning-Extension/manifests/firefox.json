@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "MAIC Learning Assistant",
+  "version": "1.0.0",
+  "description": "Đọc slide, ghi chú cục bộ và hỗ trợ điều hướng MAIC theo lựa chọn của người học.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["https://maic.chat/*", "https://learning-feal.maic.chat/*"],
+  "background": {"scripts": ["background.js"]},
+  "browser_specific_settings": {"gecko": {"id": "maic-learning-assistant@local.invalid", "strict_min_version": "115.0"}},
+  "action": {"default_popup": "popup/popup.html", "default_title": "MAIC Learning Assistant"},
+  "content_scripts": [{"matches": ["https://maic.chat/*", "https://learning-feal.maic.chat/*"], "js": ["content.js"], "run_at": "document_idle", "all_frames": false}],
+  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'none'"}
+}

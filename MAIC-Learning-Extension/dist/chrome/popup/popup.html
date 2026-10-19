@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="vi">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MAIC Learning Assistant</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <header><div class="brand"><span class="logo">M</span><div><h1>MAIC LEARNING</h1><p>Trợ lý học trong trình duyệt</p></div></div><span id="badge" class="badge">Đang kết nối</span></header>
+  <main>
+    <p id="error" role="alert" hidden></p>
+    <section class="context"><div class="eyebrow" id="website">MAIC</div><h2 id="course">Mở một tab MAIC</h2><p id="module">Chưa xác định module</p>
+      <div class="slide-row"><div><span class="caption">SLIDE HIỆN TẠI</span><strong id="slide">? / ?</strong></div><div><span class="caption">MODULE CHÍNH THỨC</span><strong id="official">Chưa xác minh</strong></div></div>
+      <p id="reason" class="muted">Trợ lý mặc định chưa bật.</p><p id="auth" class="muted"></p>
+    </section>
+    <section class="actions" aria-label="Điều khiển trợ lý">
+      <button id="start" class="primary">Bật trợ lý</button>
+      <div class="grid"><button id="previous">← Slide trước</button><button id="next">Slide sau →</button><button id="read">Đọc slide</button><button id="transcript">Mở 分页讲稿</button><button id="notes">Tạo ghi chú</button><button id="refresh">Đọc lại tiến độ</button><button id="pause">Tạm dừng</button><button id="resume">Tiếp tục</button></div>
+      <div class="auto-row"><label><input id="auto" type="checkbox"> 自动 · Hết audio thì lật trang</label><button id="stop" class="danger">Dừng</button></div>
+      <p class="hint" id="auto-hint">Chỉ dùng ô 自动 được nhận diện trên MAIC.</p>
+    </section>
+    <nav class="tabs" aria-label="Nội dung"><button data-panel="study" aria-selected="true">Ghi chú</button><button data-panel="progress" aria-selected="false">Tiến độ</button><button data-panel="settings" aria-selected="false">Cài đặt</button></nav>
+    <section id="study" class="tab-panel">
+      <div class="section-head"><h2>Trang đã đọc</h2><button id="export">Xuất .md</button></div>
+      <select id="slide-select" aria-label="Chọn ghi chú slide"><option value="">Chưa có ghi chú</option></select>
+      <div id="keywords" class="keywords"></div><p id="note-method" class="hint"></p>
+      <pre id="preview">Văn bản và lời giảng được lưu cục bộ sau khi bạn bật trợ lý.</pre>
+      <label for="personal">Ghi chú của tôi</label><textarea id="personal" rows="3" placeholder="Ý chính, ví dụ, câu hỏi cần ôn…"></textarea><button id="save-note">Lưu ghi chú của tôi</button>
+      <p class="hint">Đã đọc slide không có nghĩa module đã hoàn thành.</p>
+    </section>
+    <section id="progress" class="tab-panel" hidden>
+      <h2>Trạng thái từ giao diện MAIC</h2><div id="progress-list"></div><p id="observed" class="hint"></p>
+      <h2>Khóa và module đã tìm thấy</h2><p class="hint">Mở bài có thể bắt đầu một phiên học và ghi nhận tiến độ.</p><div id="module-list"></div>
+      <button id="last-module">Mở module lần trước (phiên học)</button>
+      <p class="hint">Chỉ liệt kê mục đã thấy. Nếu MAIC dùng div không có URL, hãy mở bài trên trang một lần để ghi nhận URL.</p>
+    </section>
+    <section id="settings" class="tab-panel" hidden>
+      <h2>Hồ sơ dữ liệu</h2><p id="profile" class="hint"></p>
+      <label for="profile-name">Hồ sơ cục bộ cho tài khoản này</label><input id="profile-name" type="text" maxlength="40" placeholder="Ví dụ: tai-khoan-1"><button id="set-profile">Dùng hồ sơ này trên tab</button>
+      <p class="hint">Không nhận diện được tài khoản: hãy đặt tên hồ sơ riêng trước khi học. Khi đổi tài khoản, đổi hồ sơ để tách dữ liệu. Các tab có thể dùng hồ sơ khác nhau.</p>
+      <label class="setting"><input id="fast-mode" type="checkbox"> Fast Study: bật phím tắt</label>
+      <label class="setting"><input id="auto-capture" type="checkbox"> Lưu văn bản khi slide hiện tại thay đổi</label>
+      <p class="hint">Alt + → / ←: đổi slide · Alt + P: tạm dừng · Alt + R: tiếp tục. Không áp dụng khi nhập văn bản.</p>
+      <button id="save-settings">Lưu cài đặt</button><button id="delete-data" class="danger">Xóa dữ liệu hồ sơ…</button>
+      <div id="delete-confirm" hidden><p>Xóa ghi chú và tiến độ đã lưu của hồ sơ này?</p><button id="confirm-delete" class="danger">Xác nhận xóa</button><button id="cancel-delete">Hủy</button></div>
+      <p class="hint">Không gửi dữ liệu ra ngoài. Không cần API key. Ghi chú dùng trích câu và từ khóa, không dùng LLM.</p>
+    </section>
+    <footer>Đọc để học · Tự trả lời câu hỏi · MAIC xác nhận hoàn thành</footer>
+  </main><script src="popup.js"></script>
+</body></html>

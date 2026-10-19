@@ -1,0 +1,13 @@
+:host { all: initial; position: fixed; top: 100px; right: 18px; z-index: 2147483646; font: 13px/1.5 system-ui,sans-serif; color: #e8efff; }
+* { box-sizing: border-box; }
+.panel { width: 254px; border: 1px solid #526381; background: #102238; border-radius: 16px; box-shadow: 0 12px 35px #0005; overflow: hidden; }
+header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: grab; touch-action: none; background: #192f4a; }
+header strong { flex: 1; letter-spacing: .06em; font-size: 11px; }
+.body { padding: 12px; }
+p { margin: 0 0 8px; }
+.count { font-size: 23px; font-weight: 650; color: #77e3ca; }
+.status { color: #bfcee5; max-height: 68px; overflow: auto; }
+.buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+button { cursor: pointer; border: 1px solid #53677f; border-radius: 8px; padding: 6px 9px; background: #243e5b; color: #fff; font: inherit; }
+button:hover { background: #36597f; } button:focus-visible { outline: 2px solid #77e3ca; }
+[hidden] { display: none !important; }

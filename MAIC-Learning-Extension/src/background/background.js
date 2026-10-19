@@ -17,8 +17,17 @@ listen(api.runtime.onMessage, (message, sender) => store.transact(async () => {
       if (!fromTab) throw new Error('Không có tab.');
       return store.patchTab(tabId, { ...message.status, url: cleanUrl(sender.url || sender.tab.url) });
     case 'SAVE_SLIDE':
-      if (!fromTab || !['running', 'paused'].includes(tab.mode)) throw new Error('Trợ lý đang dừng.');
+      if (!fromTab || (!['running', 'paused'].includes(tab.mode) && message.purpose !== 'review')) throw new Error('Trợ lý đang dừng.');
       return store.saveSlide(tab.profile, message.slide, { notes: Boolean(message.notes) });
+    case 'GET_REVIEW_DATA':
+      if (!fromTab) throw new Error('Nguồn gửi review không hợp lệ.');
+      return { ...await store.data(tab.profile), profile: tab.profile };
+    case 'SAVE_REVIEW': {
+      if (!fromTab || message.profile !== tab.profile) throw new Error('Hồ sơ đã đổi. Đã hủy lưu review.');
+      const review = await store.saveReview(tab.profile, message.review);
+      await store.patchTab(tabId, { review: { ...review, item: message.item || null } });
+      return review;
+    }
     case 'SAVE_OBSERVATION':
       if (!fromTab || tab.mode === 'stopped') throw new Error('Trợ lý đang dừng.');
       await store.saveObservation(tab.profile, message.observation); return true;

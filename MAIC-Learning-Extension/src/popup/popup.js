@@ -1,9 +1,12 @@
 import { extensionAPI, request, tabRequest } from '../core/messaging.js';
 import { safeUrl, cleanUrl } from '../core/context.js';
 import { exportMarkdown } from '../core/notes.js';
+import { ReviewPanel, savedReviewModules } from '../ui/review-panel.js';
 const api = extensionAPI(), $ = id => document.getElementById(id);
 let tab, status, data, pending = false;
 let storageTimer;
+const reviewPanel = new ReviewPanel($('review-container'), (action, args) => command(action, args));
+const countdownTimer = setInterval(() => reviewPanel.tick(), 100);
 const MODE = { running: 'Đang hỗ trợ', paused: 'Tạm dừng', stopped: 'Đã dừng' };
 const pair = value => value ? `${value.completed} / ${value.total}` : 'Chưa xác minh';
 function error(message) { $('error').hidden = !message; $('error').textContent = message || ''; }
@@ -44,6 +47,9 @@ function render() {
   $('auto-hint').textContent = status.auto === null ? 'Chưa nhận diện được ô 自动; có thể bật trực tiếp trên MAIC.' : '自动 dùng tín hiệu audio của MAIC; không tua hay giả thời gian nghe.';
   $('fast-mode').checked = status.preferences.fastMode; $('auto-capture').checked = status.preferences.autoCapture;
   $('profile').textContent = data.profile.startsWith('account:') ? 'Đã nhận diện tài khoản qua dấu hiệu UI; chỉ lưu mã băm cục bộ.' : `Hồ sơ: ${data.profile.replace(/^local:/, '')}`;
+  $('profile-notice').hidden = data.profile !== 'local:default';
+  $('profile-notice').textContent = 'Ghi chú đang lưu trong hồ sơ cục bộ mặc định. Đây không phải yêu cầu đăng nhập. Đổi hồ sơ trong Cài đặt khi đổi tài khoản MAIC.';
+  reviewPanel.update(status.review || data.review, { modules: savedReviewModules(data.slides, status.slide) });
   const progress = latestProgress(); $('official').textContent = pair(progress.modules?.value);
   $('progress-list').replaceChildren();
   for (const [key, label] of [['modules', 'Module (toàn bộ khóa)'], ['questionnaires', 'Questionnaire'], ['paper', 'Bài luận'], ['pretest', 'Pre-test'], ['topic', 'Đề tài'], ['finalExam', 'Final Exam']]) {
@@ -124,9 +130,10 @@ api.storage.onChanged.addListener((changes, area) => {
   if (storageTimer || (!update && !Object.keys(changes).some(key => key.startsWith(`data:${data?.profile}:`)))) return;
   storageTimer = setTimeout(async () => {
     storageTimer = null;
+    reviewPanel.update(status.review || data?.review);
     // Preserve a draft the user is typing while the site moves to another slide.
     if (document.activeElement?.matches('input,textarea,select')) return;
     try { await refreshData(); render(); } catch (err) { error(err.message); }
   }, 150);
 });
-window.addEventListener('unload', () => clearTimeout(storageTimer));
+window.addEventListener('unload', () => { clearTimeout(storageTimer); clearInterval(countdownTimer); reviewPanel.destroy(); });

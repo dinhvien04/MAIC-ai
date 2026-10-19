@@ -9,12 +9,16 @@ import { StudyState } from '../core/state.js';
 import { moveSlide, autoState, setAuto, revealTranscript } from '../core/navigation.js';
 import { makeNotes } from '../core/notes.js';
 import { Overlay } from '../overlay/overlay.js';
+import { SlideReview, hasReviewContent } from '../core/slide-review.js';
+import { savedReviewModules } from '../ui/review-panel.js';
 
 export class Assistant {
   constructor(doc, api) {
     this.doc = doc; this.api = api; this.state = new StudyState(); this.profile = 'local:default';
     this.preferences = { fastMode: true, autoCapture: true }; this.lastUrl = doc.URL;
-    this.overlay = new Overlay(doc, action => this.command(action));
+    this.overlay = new Overlay(doc, (action, args) => this.command(action, args));
+    this.review = this.createReview(); this.reviewWrite = Promise.resolve(); this.reviewRevision = 0;
+    this.reviewModules = []; this.restoredReviewProfile = null;
     this.keyHandler = event => this.onKey(event); this.routeHandler = () => this.schedule();
     this.focusHandler = () => this.schedule(); this.busy = false;
   }
@@ -63,15 +67,18 @@ export class Assistant {
     const profile = !this.profileOverride && marker ? await accountProfile(marker) : this.manualProfile;
     if (!this.state.valid(checkpoint)) return this.status;
     if (profile !== this.profile) {
+      this.reviewRevision++; this.review.cancel(); this.review = this.createReview(); this.restoredReviewProfile = null;
       this.observationSignature = null; this.fingerprint = null;
       if (this.state.mode === 'running') this.pause('Tài khoản/hồ sơ đã đổi. Kiểm tra hồ sơ rồi tiếp tục.');
     }
     this.profile = profile;
     if (this.lastUrl !== this.doc.URL) {
+      if (this.review.state.mode === 'reviewing') this.review.pause('Trang MAIC đã đổi. Bấm RESUME để tiếp tục bản lưu.');
       this.lastUrl = this.doc.URL;
       if (this.state.mode === 'running') this.pause('Trang đã đổi. Kiểm tra module rồi bấm Tiếp tục.');
       this.fingerprint = null;
     }
+    if (auth === 'login-required' && this.review.state.mode === 'reviewing') this.review.pause('Trang đang yêu cầu đăng nhập; review đã tạm dừng.');
     if (auth === 'login-required' && this.state.mode !== 'stopped') this.pause('Phiên đăng nhập cần kiểm tra. Hãy đăng nhập thủ công.');
     if (type === 'assessment' && this.state.mode !== 'stopped') this.pause('Trang đánh giá: trợ lý tạm dừng; tự thao tác trên MAIC.');
     this.slide = type === 'classroom' && auth !== 'login-required' ? this.state.mode === 'stopped'
@@ -82,10 +89,12 @@ export class Assistant {
       for (const root of roots) this.observer.observe(root.documentElement || root, { childList: true, subtree: true, characterData: true, attributes: true,
         attributeFilter: ['hidden', 'aria-hidden', 'aria-checked', 'checked', 'disabled', 'aria-disabled', 'class', 'style'] });
     }
-    if (type === 'classroom' && this.state.mode !== 'stopped') {
+    if (type === 'classroom' && (this.state.mode !== 'stopped' || this.review.state.mode !== 'stopped')) {
       this.overlay.mount(); this.overlay.update(this.slide, this.state.reason);
+      this.overlay.updateReview(this.reviewView(), this.reviewModules);
     } else this.overlay.remove();
     await this.report(type, auth);
+    if (this.restoredReviewProfile !== this.profile) await this.restoreReview();
     if (this.state.mode !== 'stopped' && auth !== 'login-required' && type !== 'assessment') {
       const observation = { modules: discoverModules(roots, this.doc.URL), progress: readProgress(roots, cleanUrl(this.doc.URL)) };
       if (this.slide?.moduleId) observation.modules.push({ id: this.slide.moduleId, title: this.slide.moduleTitle || 'Module chưa rõ tên',
@@ -106,6 +115,7 @@ export class Assistant {
   async report(type = pageType(this.doc.URL), auth = authState(this.doc)) {
     this.status = { mode: this.state.mode, reason: this.state.reason, pageType: type, auth, profile: this.profile,
       manualProfile: this.manualProfile, profileOverride: Boolean(this.profileOverride), slide: this.slide,
+      review: this.reviewView(),
       url: cleanUrl(this.doc.URL), auto: type === 'classroom' ? autoState(this.doc) : null, preferences: this.preferences };
     await request(this.api, 'TAB_STATUS', { status: this.status });
     if (this.overlay.host) this.overlay.update(this.slide, this.state.reason);
@@ -120,13 +130,18 @@ export class Assistant {
     this.pause(error.message); this.report().catch(console.error);
   }
   async command(action, args = {}) {
-    if (action === 'ROUTE') { if (this.state.mode !== 'stopped') return this.inspect(); return this.status; }
+    // Review commands never enter the live-player error/pause path, which may
+    // toggle MAIC's 自动 option. The cached viewer is entirely independent.
+    if (action?.startsWith('REVIEW_')) return this.reviewCommand(action, args);
+    if (action === 'ROUTE') { if (this.state.mode !== 'stopped' || this.review.state.mode === 'reviewing') return this.inspect(); return this.status; }
     if (action === 'STATUS') return this.inspect();
     if (action === 'STOP') {
+      this.reviewRevision++; this.review.stop();
       this.pause(); this.state.set('stopped', 'Đã dừng trợ lý.'); this.unwatch(); this.overlay.remove();
+      await this.reviewWrite;
       return this.report();
     }
-    if (action === 'PAUSE') { if (this.state.mode !== 'stopped') this.pause(); return this.report(); }
+    if (action === 'PAUSE') { this.reviewRevision++; this.review.pause(); if (this.state.mode !== 'stopped') this.pause(); return this.report(); }
     if (this.busy) throw new Error('Đang xử lý thao tác trước. Không bấm lặp lại.');
     this.busy = true;
     try {
@@ -134,6 +149,7 @@ export class Assistant {
         await this.inspect(); throw new Error('Trang đã đổi. Kiểm tra module rồi Tiếp tục.');
       }
       if (action === 'CONFIGURE') {
+        this.reviewRevision++; this.review.cancel(); this.review = this.createReview(); this.restoredReviewProfile = null;
         this.pause(); this.state.set('stopped', 'Đã đổi hồ sơ. Bấm Bật trợ lý.'); this.unwatch(); this.overlay.remove();
         const { tab, preferences } = await request(this.api, 'HELLO');
         this.profile = tab.profile; this.manualProfile = tab.manualProfile; this.profileOverride = tab.profileOverride; this.preferences = preferences;
@@ -142,7 +158,6 @@ export class Assistant {
       if (action === 'START' || action === 'RESUME') {
         if (authState(this.doc) === 'login-required') throw new Error('Hãy đăng nhập trực tiếp trên trang trước.');
         if (pageType(this.doc.URL) === 'assessment') throw new Error('Không bật trợ lý trong bài đánh giá.');
-        if (!this.profileOverride && !accountMarker(rootsFor(this.doc).roots) && this.manualProfile === 'local:default') throw new Error('Chưa nhận diện tài khoản. Vào Cài đặt, đặt hồ sơ cục bộ riêng cho tài khoản này rồi bật lại.');
         if (pageType(this.doc.URL) === 'classroom' && readSlide(this.doc).activity) throw new Error('Đang có câu hỏi. Trợ lý giữ tạm dừng cho đến khi bạn rời câu hỏi.');
         this.state.set('running', 'Đang hỗ trợ đọc. Điều hướng do bạn chọn.'); this.watch(); return await this.inspect();
       }
@@ -204,7 +219,72 @@ export class Assistant {
     if (!action || (this.state.mode !== 'running' && action !== 'RESUME')) return;
     event.preventDefault(); this.command(action).catch(error => this.fail(error));
   }
-  destroy() { this.state.set('stopped', 'Tab đóng.'); this.unwatch(); this.overlay.remove(); this.unlisten?.(); }
+  createReview() { return new SlideReview({ onUpdate: (snapshot, persist) => this.onReviewUpdate(snapshot, persist) }); }
+  reviewView() { return { ...this.review.snapshot(), item: this.review.current() }; }
+  onReviewUpdate(snapshot, persist) {
+    if (!persist) { this.overlay.reviewPanel?.tick(); return; }
+    const review = { ...snapshot, item: this.review.current() };
+    if (this.status) this.status.review = review;
+    if (pageType(this.doc.URL) === 'classroom' && authState(this.doc) !== 'login-required' && (snapshot.mode !== 'stopped' || this.state.mode !== 'stopped')) {
+      this.overlay.mount(); this.overlay.update(this.slide, this.state.reason);
+      this.overlay.updateReview(review, this.reviewModules);
+    } else if (this.state.mode === 'stopped') this.overlay.remove();
+    const profile = this.profile;
+    this.reviewWrite = request(this.api, 'SAVE_REVIEW', { profile, review: snapshot, item: review.item }).catch(error => {
+      if (profile !== this.profile) return;
+      this.review.cancel(); Object.assign(this.review.state, { mode: 'paused', deadline: null, reason: `Không lưu được review: ${error.message}` });
+      this.overlay.updateReview(this.reviewView(), this.reviewModules);
+      this.reviewError = error;
+    });
+  }
+  async restoreReview() {
+    const profile = this.profile;
+    const data = await request(this.api, 'GET_REVIEW_DATA');
+    if (this.profile !== profile || data.profile !== profile) return;
+    this.restoredReviewProfile = profile;
+    this.reviewModules = savedReviewModules(data.slides, this.slide);
+    this.review.restore(data.review, data.slides);
+    if (this.status) this.status.review = this.reviewView();
+    await this.reviewWrite;
+  }
+  async reviewCommand(action, args = {}) {
+    const revision = ++this.reviewRevision;
+    this.reviewError = null;
+    if (action === 'REVIEW_PAUSE') this.review.pause();
+    else if (action === 'REVIEW_STOP') this.review.stop();
+    else if (action === 'REVIEW_INTERVAL') this.review.setInterval(args.intervalMs);
+    else if (action === 'REVIEW_START' || action === 'REVIEW_RESUME') {
+      if (pageType(this.doc.URL) === 'assessment') throw new Error('Trợ lý giữ tạm dừng trong trang đánh giá.');
+      const profile = this.profile;
+      let data = await request(this.api, 'GET_REVIEW_DATA');
+      if (revision !== this.reviewRevision || profile !== this.profile || data.profile !== profile) throw new Error('Đã hủy khởi động review.');
+      const moduleId = args.moduleId || this.review.state.moduleId || this.slide?.moduleId || data.slides[0]?.moduleId;
+      if (!moduleId) throw new Error('Mở một module và bấm Đọc slide trước khi xem nhanh.');
+      if (action === 'REVIEW_RESUME' && moduleId !== this.review.state.moduleId) throw new Error('Chọn lại module của vị trí đã lưu hoặc bấm START.');
+      const savedSlides = data.slides.filter(slide => slide.moduleId === moduleId);
+      const sameSource = this.slide?.moduleId === moduleId;
+      const number = action === 'REVIEW_RESUME' ? this.review.state.currentSlide : args.slideNumber ??
+        (data.review?.moduleId === moduleId ? data.review.currentSlide : sameSource ? this.slide.slideNumber : savedSlides[0]?.slideNumber);
+      // Read only the already-open page, and only if it has not been cached.
+      // No revealTranscript, Next/Previous, audio changes or remote fetch here.
+      if (!hasReviewContent(savedSlides.find(slide => slide.slideNumber === number)) && sameSource && number === this.slide.slideNumber && authState(this.doc) !== 'login-required') {
+        const slide = readSlide(this.doc);
+        if (hasReviewContent(slide)) {
+          await request(this.api, 'SAVE_SLIDE', { slide, purpose: 'review' });
+          data = await request(this.api, 'GET_REVIEW_DATA');
+        }
+      }
+      if (revision !== this.reviewRevision || profile !== this.profile || data.profile !== profile) throw new Error('Đã hủy khởi động review.');
+      this.reviewModules = savedReviewModules(data.slides, this.slide);
+      if (action === 'REVIEW_RESUME') this.review.resume(data.slides);
+      else this.review.start(data.slides, { moduleId, slideNumber: number,
+        totalSlides: sameSource ? this.slide.totalSlides : undefined, intervalMs: args.intervalMs ?? this.review.state.intervalMs });
+    } else throw new Error('Lệnh review không được hỗ trợ.');
+    await this.reviewWrite;
+    if (this.reviewError) throw this.reviewError;
+    return { ...this.status, review: this.reviewView() };
+  }
+  destroy() { this.reviewRevision++; this.review.pause('Tab vừa đóng/đổi trang. Bấm RESUME để tiếp tục bản lưu.'); this.review.cancel(); this.state.set('stopped', 'Tab đóng.'); this.unwatch(); this.overlay.remove(); this.unlisten?.(); }
 }
 if (typeof document !== 'undefined' && !globalThis.__MAIC_LEARNING_EXTENSION__) {
   globalThis.__MAIC_LEARNING_EXTENSION__ = true;

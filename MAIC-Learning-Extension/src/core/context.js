@@ -49,8 +49,10 @@ export function moduleContext(roots, url) {
   }
   if (parts.length < 2) {
     const titles = all(roots, 'div,span').filter(el => el.children.length < 4)
-      .map(textOf).filter(text => text.length < 500 && text.split(/\s+\/\s+/).length === 3);
-    if (new Set(titles).size === 1) parts = titles[0].split(/\s+\/\s+/).map(normalize);
+      .map(textOf).filter(text => text.length < 1200 && text.split(/\s*\/\s*/).length === 3 &&
+        text.split(/\s*\/\s*/).every(part => /\p{L}/u.test(part)));
+    const unique = [...new Set(titles.map(title => title.split(/\s*\/\s*/).map(normalize).join(' / ')))];
+    if (unique.length === 1) parts = unique[0].split(' / ');
   }
   return { ...ids, courseTitle: parts.length >= 2 ? parts[0] : null,
     moduleTitle: parts.length >= 2 ? parts.at(-1) : null, url: cleanUrl(url) };

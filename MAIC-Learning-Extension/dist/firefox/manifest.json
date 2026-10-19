@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MAIC Learning Assistant",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Đọc slide, ghi chú cục bộ và hỗ trợ điều hướng MAIC theo lựa chọn của người học.",
   "permissions": ["storage", "activeTab"],
   "host_permissions": ["https://maic.chat/*", "https://learning-feal.maic.chat/*"],

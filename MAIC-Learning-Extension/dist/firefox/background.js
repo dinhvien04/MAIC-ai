@@ -55,6 +55,14 @@
     return match ? { courseId: match[1], chapterId: match[2], moduleId: match.slice(1).join("/") } : null;
   }
 
+  // src/core/slide-review.js
+  var REVIEW_MODES = ["stopped", "reviewing", "paused", "blocked", "completed"];
+  function validReviewInterval(value) {
+    const interval = Number(value);
+    if (!Number.isFinite(interval) || interval < 100 || interval > 36e5) throw new Error("Kho\u1EA3ng chuy\u1EC3n trang ph\u1EA3i t\u1EEB 0,1 \u0111\u1EBFn 3600 gi\xE2y.");
+    return Math.round(interval);
+  }
+
   // src/core/storage.js
   var DEFAULT_PROFILE = "local:default";
   var Store = class {
@@ -85,7 +93,8 @@
         slides: rows.filter((x) => x.recordType === "slide").sort((a, b) => a.moduleId.localeCompare(b.moduleId) || a.slideNumber - b.slideNumber),
         modules: rows.filter((x) => x.recordType === "module"),
         progress: rows.filter((x) => x.recordType === "progress"),
-        lastModule: await this.get(`last:${profile}`)
+        lastModule: await this.get(`last:${profile}`),
+        review: await this.get(`review:${profile}`)
       };
     }
     async saveSlide(profile, slide, { notes = false } = {}) {
@@ -105,6 +114,7 @@
         content: slide.content?.slice(0, 24e3) || previous.content || "",
         transcript: slide.transcript?.slice(0, 24e3) || previous.transcript || "",
         explanations: slide.explanations?.slice(0, 12e3) || previous.explanations || "",
+        activity: slide.activity || previous.activity || null,
         extractedAt: slide.extractedAt,
         summary: notes ? slide.summary : previous.summary || "",
         keywords: notes ? slide.keywords : previous.keywords || [],
@@ -120,6 +130,23 @@
       const previous = await this.get(key);
       if (!previous) throw new Error("H\xE3y \u0111\u1ECDc trang tr\u01B0\u1EDBc khi l\u01B0u ghi ch\xFA.");
       return this.put(key, { ...previous, personalNote: String(text).slice(0, 12e3) });
+    }
+    async saveReview(profile, snapshot) {
+      if (!REVIEW_MODES.includes(snapshot.mode)) throw new Error("Tr\u1EA1ng th\xE1i review kh\xF4ng h\u1EE3p l\u1EC7.");
+      const intervalMs = validReviewInterval(snapshot.intervalMs);
+      if (snapshot.moduleId && (!Number.isInteger(snapshot.currentSlide) || !Number.isInteger(snapshot.totalSlides) || snapshot.currentSlide < 1 || snapshot.currentSlide > snapshot.totalSlides || snapshot.totalSlides > 2e3)) throw new Error("V\u1ECB tr\xED review kh\xF4ng h\u1EE3p l\u1EC7.");
+      return this.put(`review:${profile}`, {
+        mode: snapshot.mode,
+        moduleId: snapshot.moduleId || null,
+        currentSlide: snapshot.currentSlide,
+        totalSlides: snapshot.totalSlides,
+        intervalMs,
+        remainingMs: Math.min(intervalMs, Math.max(0, Number(snapshot.remainingMs) || 0)),
+        deadline: snapshot.mode === "reviewing" ? snapshot.deadline : null,
+        missingSlide: snapshot.missingSlide || null,
+        reason: String(snapshot.reason || "").slice(0, 500),
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
     }
     async saveObservation(profile, { modules = [], progress = null }) {
       for (const module of modules.slice(0, 150)) {
@@ -140,7 +167,7 @@
     }
     async deleteProfile(profile) {
       const values = await this.local.get(null);
-      const keys = Object.keys(values).filter((key) => key.startsWith(`data:${profile}:`) || key === `last:${profile}`);
+      const keys = Object.keys(values).filter((key) => key.startsWith(`data:${profile}:`) || key === `last:${profile}` || key === `review:${profile}`);
       if (keys.length) await this.local.remove(keys);
     }
   };
@@ -169,8 +196,17 @@
         if (!fromTab) throw new Error("Kh\xF4ng c\xF3 tab.");
         return store.patchTab(tabId, { ...message.status, url: cleanUrl(sender.url || sender.tab.url) });
       case "SAVE_SLIDE":
-        if (!fromTab || !["running", "paused"].includes(tab.mode)) throw new Error("Tr\u1EE3 l\xFD \u0111ang d\u1EEBng.");
+        if (!fromTab || !["running", "paused"].includes(tab.mode) && message.purpose !== "review") throw new Error("Tr\u1EE3 l\xFD \u0111ang d\u1EEBng.");
         return store.saveSlide(tab.profile, message.slide, { notes: Boolean(message.notes) });
+      case "GET_REVIEW_DATA":
+        if (!fromTab) throw new Error("Ngu\u1ED3n g\u1EEDi review kh\xF4ng h\u1EE3p l\u1EC7.");
+        return { ...await store.data(tab.profile), profile: tab.profile };
+      case "SAVE_REVIEW": {
+        if (!fromTab || message.profile !== tab.profile) throw new Error("H\u1ED3 s\u01A1 \u0111\xE3 \u0111\u1ED5i. \u0110\xE3 h\u1EE7y l\u01B0u review.");
+        const review = await store.saveReview(tab.profile, message.review);
+        await store.patchTab(tabId, { review: { ...review, item: message.item || null } });
+        return review;
+      }
       case "SAVE_OBSERVATION":
         if (!fromTab || tab.mode === "stopped") throw new Error("Tr\u1EE3 l\xFD \u0111ang d\u1EEBng.");
         await store.saveObservation(tab.profile, message.observation);

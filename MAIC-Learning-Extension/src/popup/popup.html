@@ -8,7 +8,9 @@
     <section class="context"><div class="eyebrow" id="website">MAIC</div><h2 id="course">Mở một tab MAIC</h2><p id="module">Chưa xác định module</p>
       <div class="slide-row"><div><span class="caption">SLIDE HIỆN TẠI</span><strong id="slide">? / ?</strong></div><div><span class="caption">MODULE CHÍNH THỨC</span><strong id="official">Chưa xác minh</strong></div></div>
       <p id="reason" class="muted">Trợ lý mặc định chưa bật.</p><p id="auth" class="muted"></p>
+      <p id="profile-notice" class="hint" hidden></p>
     </section>
+    <div id="review-container"></div>
     <section class="actions" aria-label="Điều khiển trợ lý">
       <button id="start" class="primary">Bật trợ lý</button>
       <div class="grid"><button id="previous">← Slide trước</button><button id="next">Slide sau →</button><button id="read">Đọc slide</button><button id="transcript">Mở 分页讲稿</button><button id="notes">Tạo ghi chú</button><button id="refresh">Đọc lại tiến độ</button><button id="pause">Tạm dừng</button><button id="resume">Tiếp tục</button></div>
@@ -33,7 +35,7 @@
     <section id="settings" class="tab-panel" hidden>
       <h2>Hồ sơ dữ liệu</h2><p id="profile" class="hint"></p>
       <label for="profile-name">Hồ sơ cục bộ cho tài khoản này</label><input id="profile-name" type="text" maxlength="40" placeholder="Ví dụ: tai-khoan-1"><button id="set-profile">Dùng hồ sơ này trên tab</button>
-      <p class="hint">Không nhận diện được tài khoản: hãy đặt tên hồ sơ riêng trước khi học. Khi đổi tài khoản, đổi hồ sơ để tách dữ liệu. Các tab có thể dùng hồ sơ khác nhau.</p>
+      <p class="hint">Hồ sơ chỉ là nơi lưu ghi chú trên máy, không phải đăng nhập MAIC. Có thể dùng hồ sơ mặc định. Khi đổi tài khoản, đổi hồ sơ để tách dữ liệu. Các tab có thể dùng hồ sơ khác nhau.</p>
       <label class="setting"><input id="fast-mode" type="checkbox"> Fast Study: bật phím tắt</label>
       <label class="setting"><input id="auto-capture" type="checkbox"> Lưu văn bản khi slide hiện tại thay đổi</label>
       <p class="hint">Alt + → / ←: đổi slide · Alt + P: tạm dừng · Alt + R: tiếp tục. Không áp dụng khi nhập văn bản.</p>

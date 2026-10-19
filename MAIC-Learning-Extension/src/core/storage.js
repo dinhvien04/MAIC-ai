@@ -1,4 +1,5 @@
 import { cleanUrl, safeUrl, classroomIds } from './context.js';
+import { REVIEW_MODES, validReviewInterval } from './slide-review.js';
 export const DEFAULT_PROFILE = 'local:default';
 export class Store {
   constructor(local) { this.local = local; this.queue = Promise.resolve(); }
@@ -17,7 +18,7 @@ export class Store {
     const rows = Object.entries(all).filter(([key]) => key.startsWith(prefix)).map(([, value]) => value);
     return { slides: rows.filter(x => x.recordType === 'slide').sort((a, b) => a.moduleId.localeCompare(b.moduleId) || a.slideNumber - b.slideNumber),
       modules: rows.filter(x => x.recordType === 'module'), progress: rows.filter(x => x.recordType === 'progress'),
-      lastModule: await this.get(`last:${profile}`) };
+      lastModule: await this.get(`last:${profile}`), review: await this.get(`review:${profile}`) };
   }
   async saveSlide(profile, slide, { notes = false } = {}) {
     if (!slide.moduleId || !slide.slideNumber || !safeUrl(slide.url)) throw new Error('Chưa xác định module/trang; không lưu vào nhầm bài.');
@@ -32,6 +33,7 @@ export class Store {
       content: slide.content?.slice(0, 24000) || previous.content || '',
       transcript: slide.transcript?.slice(0, 24000) || previous.transcript || '',
       explanations: slide.explanations?.slice(0, 12000) || previous.explanations || '',
+      activity: slide.activity || previous.activity || null,
       extractedAt: slide.extractedAt, summary: notes ? slide.summary : previous.summary || '',
       keywords: notes ? slide.keywords : previous.keywords || [], method: notes ? slide.method : previous.method || '',
       personalNote: previous.personalNote || '' };
@@ -44,6 +46,17 @@ export class Store {
     const previous = await this.get(key);
     if (!previous) throw new Error('Hãy đọc trang trước khi lưu ghi chú.');
     return this.put(key, { ...previous, personalNote: String(text).slice(0, 12000) });
+  }
+  async saveReview(profile, snapshot) {
+    if (!REVIEW_MODES.includes(snapshot.mode)) throw new Error('Trạng thái review không hợp lệ.');
+    const intervalMs = validReviewInterval(snapshot.intervalMs);
+    if (snapshot.moduleId && (!Number.isInteger(snapshot.currentSlide) || !Number.isInteger(snapshot.totalSlides) || snapshot.currentSlide < 1 || snapshot.currentSlide > snapshot.totalSlides || snapshot.totalSlides > 2000)) throw new Error('Vị trí review không hợp lệ.');
+    // Separate key: review never writes module completion, observations or notes.
+    return this.put(`review:${profile}`, { mode: snapshot.mode, moduleId: snapshot.moduleId || null,
+      currentSlide: snapshot.currentSlide, totalSlides: snapshot.totalSlides, intervalMs,
+      remainingMs: Math.min(intervalMs, Math.max(0, Number(snapshot.remainingMs) || 0)),
+      deadline: snapshot.mode === 'reviewing' ? snapshot.deadline : null, missingSlide: snapshot.missingSlide || null,
+      reason: String(snapshot.reason || '').slice(0, 500), updatedAt: new Date().toISOString() });
   }
   async saveObservation(profile, { modules = [], progress = null }) {
     for (const module of modules.slice(0, 150)) {
@@ -61,7 +74,7 @@ export class Store {
   }
   async deleteProfile(profile) {
     const values = await this.local.get(null);
-    const keys = Object.keys(values).filter(key => key.startsWith(`data:${profile}:`) || key === `last:${profile}`);
+    const keys = Object.keys(values).filter(key => key.startsWith(`data:${profile}:`) || key === `last:${profile}` || key === `review:${profile}`);
     if (keys.length) await this.local.remove(keys);
   }
 }

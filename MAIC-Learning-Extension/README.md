@@ -32,14 +32,44 @@ Manifest Chrome yêu cầu Chrome/Chromium 109 trở lên. Smoke test chạy tr�
 
 1. Mở MAIC trong chính trình duyệt đã cài extension và đăng nhập bình thường. Extension không có form mật khẩu.
 2. Mở popup. Trạng thái ban đầu là **Đã dừng**; extension chỉ nhận diện trang, chưa lưu văn bản slide.
-3. Vào **Cài đặt**, đặt hồ sơ như `tai-khoan-1`. Dùng tên khác cho từng tài khoản. Cài đặt hồ sơ áp dụng cho tab hiện tại và được giữ khi tải lại tab.
-4. Bấm **Bật trợ lý**. Nếu nhận diện được dấu hiệu tài khoản rõ ràng từ UI, extension có thể dùng mã băm cục bộ; nếu không, bắt buộc chọn hồ sơ cục bộ trước khi bật. Không cần nhập email hay thông tin đăng nhập vào extension.
+3. Có thể dùng hồ sơ cục bộ mặc định ngay. Nếu dùng nhiều tài khoản, vào **Cài đặt**, đặt tên riêng như `tai-khoan-1`; cài đặt áp dụng cho tab hiện tại và được giữ khi tải lại tab.
+4. Bấm **Bật trợ lý**. Nếu nhận diện được dấu hiệu tài khoản rõ ràng từ UI, extension có thể dùng mã băm cục bộ; nếu không, dùng hồ sơ mặc định và hiện nhắc đổi hồ sơ khi đổi tài khoản. Hồ sơ là nơi lưu dữ liệu, không phải yêu cầu đăng nhập MAIC. Không cần nhập email hay mật khẩu vào extension.
 5. Mở khóa/module trên website hoặc từ danh sách **Tiến độ**. Nút mở ghi rõ đây là **phiên học**, vì MAIC có thể ghi nhận việc vào bài.
 6. Trong phòng học, dùng **Slide sau / Slide trước**, **Đọc slide**, **Mở 分页讲稿** hoặc **Tạo ghi chú**. Bảng nổi tiếp tục hoạt động sau khi đóng popup.
 7. Để đọc tiến độ chính thức, mở Learning Assistant, chọn **全部课程**, bấm **Đọc lại tiến độ**. Extension thử mở nút `学习进度` nếu nhận diện duy nhất. Nếu không, mở bảng bằng tay rồi đọc lại.
 8. Trong **Ghi chú**, chọn một trang đã đọc, viết ghi chú cá nhân, bấm lưu và **Xuất .md**.
 
 Hồ sơ không tự liên kết giữa các tab mới hoặc các trình duyệt. Chọn cùng tên hồ sơ khi muốn lưu hai website vào cùng nhóm dữ liệu. Khi đổi tài khoản mà website không cung cấp dấu hiệu nhận diện, cần tự đổi hồ sơ. Sau khi đóng hẳn trình duyệt, trạng thái tab được xóa để tránh dùng nhầm ID tab; dữ liệu ghi chú vẫn giữ nguyên khi extension còn được cài.
+
+## AUTO SLIDE REVIEW
+
+Chế độ này xem lại bản văn bản đã trích xuất trong trình xem riêng ở popup và floating overlay. Số **Current Slide** của review là vị trí trong bản lưu; số slide của phòng học MAIC vẫn được hiển thị riêng.
+
+1. Khi tự học trên MAIC, bấm **Đọc slide** hoặc mở **分页讲稿** để lưu nội dung đã truy cập. Có thể bật trợ lý để tự lưu khi nội dung trang hiện tại thay đổi.
+2. Trong khung **AUTO SLIDE REVIEW**, chọn module muốn ôn.
+3. Chọn interval **1s / 2s / 3s / 5s** hoặc nhập **Custom (s)**. Mặc định **3 giây**.
+4. Bấm **▶ START**. Nếu trang hiện tại chưa được lưu và đang mở sẵn trong phòng học, extension thử đọc DOM của chính trang đó qua `slide-reader.js`. Nội dung đã lưu được dùng lại; không tải tài liệu từ mạng và không tự mở/lật bài để lấy thêm nội dung.
+5. Xem **Current Slide**, **Next Slide In** và **Status: Reviewing**. Có thể đóng popup; trình xem nổi và timer trong tab tiếp tục chạy.
+6. **⏸ PAUSE** hủy timer ngay và giữ thời gian còn lại; **▶ RESUME** tiếp tục. **⏹ STOP** hủy timer và dừng lượt review, giữ nguyên nội dung và ghi chú.
+
+Chỉ có một timer điều khiển lượt review trên mỗi tab. Đổi interval sẽ thay timer hiện tại. Timer bị trình duyệt làm chậm khi tab nằm nền thì việc chuyển trang có thể trễ; extension không chạy bù để nhảy qua hàng loạt slide.
+
+**Thiếu slide kế tiếp:** review dừng và ghi rõ số trang còn thiếu. Người học tự mở trang đó trên MAIC và trích xuất nội dung, rồi bấm RESUME. Không nhảy qua khoảng trống. Ở slide cuối, review dừng với trạng thái **Stopped · Last slide**; đây không phải xác nhận hoàn thành module MAIC.
+
+**Gặp câu hỏi:** bản lưu có `单选题`, `多选题`, `Quiz`, `Assessment`, `Final Exam` hoặc cờ hoạt động từ slide-reader sẽ chuyển sang Paused. Không tự trả lời, gửi bài, xem trang khác hay bấm `完成`. RESUME không bỏ qua slide vẫn được nhận diện là câu hỏi; người học tự tham gia trên website.
+
+Checkpoint lưu riêng theo hồ sơ trong `browser.storage.local`: module ID, vị trí hiện tại, tổng trang, interval, thời gian còn lại và trạng thái. Nội dung nằm trong các bản ghi slide sẵn có. Sau reload, review từng chạy được khôi phục ở Paused và cần bấm RESUME; không tự chạy khi mở trình duyệt. Checkpoint là lượt review gần nhất của hồ sơ; khi nhiều tab dùng chung hồ sơ, lần lưu sau cùng là checkpoint để khôi phục.
+
+Các nút trong **AUTO SLIDE REVIEW** chỉ tác động trình xem bản lưu, không bấm Next/Previous trên MAIC, không đổi ô **自动**, không thay thời lượng audio, không tạo request hoàn thành hay sửa Progress Tracker/ghi chú. Nút **Dừng trợ lý** bên ngoài khung vẫn dừng toàn bộ hoạt động extension theo hành vi cũ. Học liệu đang phát trên MAIC có vòng đời riêng; tắt trên website nếu muốn ngừng nghe.
+
+### Reload bản nâng cấp trên Firefox
+
+1. Mở `about:debugging#/runtime/this-firefox`.
+2. Tìm **MAIC Learning Assistant**, bấm **Reload / Tải lại**.
+3. Tải lại tab MAIC để thay content script cũ. Đăng nhập trình duyệt và dữ liệu storage không bị thay đổi bởi việc reload extension.
+4. Mở popup → **AUTO SLIDE REVIEW** → chọn module, interval → **START**, hoặc **RESUME** nếu đã có checkpoint.
+
+Nếu add-on không còn trong danh sách, dùng **Load Temporary Add-on** và chọn lại `dist/firefox/manifest.json`.
 
 ## Chức năng đã triển khai
 
@@ -49,7 +79,7 @@ Hồ sơ không tự liên kết giữa các tab mới hoặc các trình duyệ
 - Truy cập DOM thường, Shadow DOM mở và iframe cùng origin; không vượt iframe khác origin hoặc Shadow DOM đóng.
 - **Fast Study**: phím tắt, chọn nhanh slide đã đọc, từ khóa, trích đoạn và ghi chú riêng cho từng trang.
 - Điều hướng từng lần do người học yêu cầu. Mỗi lệnh chỉ bấm một nút đúng nhãn; nút thiếu, mơ hồ hoặc disabled thì báo lỗi và dừng.
-- Đọc/bật/tắt ô **自动** nếu tìm được đúng một checkbox có nhãn xác minh được. Chính MAIC điều khiển việc sang trang khi audio hết; extension không tạo sự kiện audio và không có timer tự lật slide.
+- Đọc/bật/tắt ô **自动** nếu tìm được đúng một checkbox có nhãn xác minh được. Chính MAIC điều khiển việc sang trang khi audio hết; extension không tạo sự kiện audio và không có timer tự lật slide trong phòng học. Timer Auto Slide Review chỉ chuyển bản lưu trong trình xem riêng.
 - Tự lưu trang đang hiện khi nội dung thay đổi nếu bật cài đặt này. Không quét hay lật hàng loạt trang để lấy nội dung.
 - Bảng nổi dùng Shadow DOM, kéo thả, thu gọn, số slide, điều hướng, ghi chú, Pause/Resume/Stop.
 - Popup 380 px cập nhật từ storage khi trang thay đổi; trạng thái hoạt động nằm ở content script, không phụ thuộc popup.

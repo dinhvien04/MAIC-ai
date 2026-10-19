@@ -21,9 +21,15 @@ export function mockAPI() {
         if (message.type === 'HELLO') result = { tab, preferences: { fastMode: true, autoCapture: true } };
         else if (message.type === 'TAB_STATUS') result = await store.patchTab(1, message.status);
         else if (message.type === 'SAVE_SLIDE') {
-          if (tab.mode === 'stopped') throw new Error('Stopped');
+          if (tab.mode === 'stopped' && message.purpose !== 'review') throw new Error('Stopped');
           result = await store.saveSlide(tab.profile, message.slide, { notes: message.notes });
         } else if (message.type === 'SAVE_OBSERVATION') await store.saveObservation(tab.profile, message.observation);
+        else if (message.type === 'GET_REVIEW_DATA') result = { ...await store.data(tab.profile), profile: tab.profile };
+        else if (message.type === 'SAVE_REVIEW') {
+          if (tab.profile !== message.profile) throw new Error('Profile changed');
+          result = await store.saveReview(tab.profile, message.review);
+          await store.patchTab(1, { review: { ...result, item: message.item } });
+        }
         return { ok: true, result };
       } catch (error) { return { ok: false, error: error.message }; }
     } } };

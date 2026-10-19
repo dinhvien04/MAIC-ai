@@ -1,0 +1,12 @@
+.review-panel { padding: 12px; margin: 12px 0; border: 1px solid #7391a7; border-radius: 11px; background: #edf5f5; color: #17394a; font: 12px/1.5 system-ui,sans-serif; }
+.review-panel .review-title { margin: 0 0 5px; font-size: 12px; letter-spacing: .06em; color: inherit; }
+.review-panel .review-hint { font-size: 11px; margin: 5px 0; color: inherit; opacity: .85; }
+.review-panel .review-module { width: 100%; margin: 6px 0; padding: 6px; color: #17394a; background: #fff; border: 1px solid #a6bbca; border-radius: 6px; font: inherit; }
+.review-panel .review-intervals,.review-panel .review-controls { display: flex; flex-wrap: wrap; gap: 5px; margin: 7px 0; }
+.review-panel button { font: inherit; padding: 5px 7px; color: #17394a; background: #fff; border: 1px solid #9db7c4; border-radius: 6px; cursor: pointer; }
+.review-panel button[aria-pressed="true"] { background: #176b60; color: #fff; border-color: #176b60; }
+.review-panel button:disabled { opacity: .45; cursor: default; }
+.review-panel .review-custom { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; }
+.review-panel .review-custom input { width: 58px; padding: 4px; margin: 0; border: 1px solid #9db7c4; border-radius: 5px; color: #17394a; background: #fff; font: inherit; }
+.review-panel .review-position,.review-panel .review-countdown,.review-panel .review-status { margin: 3px 0; font-weight: 600; }
+.review-panel .review-content { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: #fff; color: #20334c; padding: 9px; border-radius: 7px; font: 12px/1.6 system-ui,sans-serif; margin: 8px 0 0; }

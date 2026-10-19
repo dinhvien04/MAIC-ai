@@ -57,8 +57,29 @@ try {
   await mkdir(`${root}artifacts`, { recursive: true });
   await popup.setViewport({ width: 380, height: 930, deviceScaleFactor: 1 });
   await popup.screenshot({ path: `${root}artifacts/popup-chrome.png`, fullPage: true });
+  assert.equal(await popup.$eval('.review-custom input', element => element.value), '3');
+  await page.$eval('#auto', element => { element.checked = true; });
+  await popup.$eval('[data-interval="1000"]', element => element.click());
+  await popup.waitForFunction(() => document.querySelector('[data-interval="1000"]').getAttribute('aria-pressed') === 'true', { polling: 100 });
+  await popup.$eval('[data-action="REVIEW_START"]', element => element.click());
+  await popup.waitForFunction(() => document.querySelector('.review-status').textContent === 'Status: Reviewing', { polling: 100 });
+  checks.push('Auto Slide Review starts from popup; 3-second default and interval controls');
   await worker.evaluate(id => chrome.tabs.remove(id), popupCreated.id);
-  await page.reload(); assert.equal((await waitConnected()).mode, 'paused');
+  try {
+    await page.waitForFunction(() => document.querySelector('[data-maic-extension]')?.shadowRoot.querySelector('.review-position').textContent.includes('2 / 31'), { polling: 100, timeout: 5000 });
+  } catch (error) {
+    console.log('Review diagnostic:', await send('STATUS'));
+    throw error;
+  }
+  assert.equal(await page.$eval('[data-slide-counter]', element => element.textContent), '1/31');
+  assert.equal(await page.$eval('#auto', element => element.checked), true);
+  await send('REVIEW_PAUSE');
+  assert.equal((await send('STATUS')).review.currentSlide, 2);
+  checks.push('Cached viewer advances after popup closes; MAIC slide and 自动 remain unchanged');
+  await page.reload(); const recovered = await waitConnected(); assert.equal(recovered.mode, 'paused');
+  assert.equal(recovered.review.mode, 'paused'); assert.equal(recovered.review.currentSlide, 2);
+  await send('REVIEW_STOP');
+  checks.push('Review checkpoint survives reload; explicit Resume required');
   const records = await worker.evaluate(() => chrome.storage.local.get(null));
   assert.ok(Object.values(records).some(value => value.recordType === 'slide' && value.summary)); checks.push('Notes survive reload; recovery stays paused');
   await page.goto('https://learning-feal.maic.chat/dashboard');

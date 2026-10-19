@@ -79,6 +79,131 @@
     return lines.join("\n");
   }
 
+  // src/ui/review-panel.css
+  var review_panel_default = '.review-panel { padding: 12px; margin: 12px 0; border: 1px solid #7391a7; border-radius: 11px; background: #edf5f5; color: #17394a; font: 12px/1.5 system-ui,sans-serif; }\n.review-panel .review-title { margin: 0 0 5px; font-size: 12px; letter-spacing: .06em; color: inherit; }\n.review-panel .review-hint { font-size: 11px; margin: 5px 0; color: inherit; opacity: .85; }\n.review-panel .review-module { width: 100%; margin: 6px 0; padding: 6px; color: #17394a; background: #fff; border: 1px solid #a6bbca; border-radius: 6px; font: inherit; }\n.review-panel .review-intervals,.review-panel .review-controls { display: flex; flex-wrap: wrap; gap: 5px; margin: 7px 0; }\n.review-panel button { font: inherit; padding: 5px 7px; color: #17394a; background: #fff; border: 1px solid #9db7c4; border-radius: 6px; cursor: pointer; }\n.review-panel button[aria-pressed="true"] { background: #176b60; color: #fff; border-color: #176b60; }\n.review-panel button:disabled { opacity: .45; cursor: default; }\n.review-panel .review-custom { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; }\n.review-panel .review-custom input { width: 58px; padding: 4px; margin: 0; border: 1px solid #9db7c4; border-radius: 5px; color: #17394a; background: #fff; font: inherit; }\n.review-panel .review-position,.review-panel .review-countdown,.review-panel .review-status { margin: 3px 0; font-weight: 600; }\n.review-panel .review-content { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: #fff; color: #20334c; padding: 9px; border-radius: 7px; font: 12px/1.6 system-ui,sans-serif; margin: 8px 0 0; }\n';
+
+  // src/ui/review-panel.js
+  function savedReviewModules(slides, current) {
+    const modules = new Map(slides.map((slide) => [slide.moduleId, { id: slide.moduleId, title: slide.moduleTitle || slide.moduleId }]));
+    if (current?.moduleId && !modules.has(current.moduleId)) modules.set(current.moduleId, { id: current.moduleId, title: current.moduleTitle || current.moduleId });
+    return [...modules.values()];
+  }
+  var ReviewPanel = class {
+    constructor(parent, command2) {
+      this.doc = parent.ownerDocument;
+      this.command = command2;
+      this.events = new this.doc.defaultView.AbortController();
+      const el = (tag, className, text) => {
+        const node = this.doc.createElement(tag);
+        if (className) node.className = className;
+        if (text) node.textContent = text;
+        return node;
+      };
+      this.host = el("section", "review-panel");
+      this.host.setAttribute("aria-label", "AUTO SLIDE REVIEW");
+      parent.append(this.host);
+      const style = el("style");
+      style.textContent = review_panel_default;
+      this.host.append(style);
+      this.host.append(el("h2", "review-title", "AUTO SLIDE REVIEW"), el("p", "review-hint", "Xem b\u1EA3n \u0111\xE3 l\u01B0u \xB7 Kh\xF4ng chuy\u1EC3n trang h\u1ECDc MAIC"));
+      this.modules = el("select", "review-module");
+      this.modules.setAttribute("aria-label", "Module \u0111\u1EC3 xem nhanh");
+      this.host.append(this.modules);
+      const intervals = el("div", "review-intervals");
+      intervals.setAttribute("aria-label", "Interval");
+      this.host.append(intervals);
+      this.presets = [];
+      for (const seconds of [1, 2, 3, 5]) {
+        const button = this.button(`${seconds}s`, () => this.run("REVIEW_INTERVAL", { intervalMs: seconds * 1e3 }));
+        button.dataset.interval = String(seconds * 1e3);
+        this.presets.push(button);
+        intervals.append(button);
+      }
+      const label = el("label", "review-custom", "Custom (s)");
+      this.custom = el("input");
+      this.custom.type = "number";
+      this.custom.min = "0.1";
+      this.custom.max = "3600";
+      this.custom.step = "0.1";
+      this.custom.value = "3";
+      this.custom.setAttribute("aria-label", "Custom interval, gi\xE2y");
+      label.append(this.custom);
+      intervals.append(label);
+      this.custom.addEventListener("change", () => this.run("REVIEW_INTERVAL", { intervalMs: Number(this.custom.value) * 1e3 }), { signal: this.events.signal });
+      const controls = el("div", "review-controls");
+      this.host.append(controls);
+      this.controls = {};
+      for (const [label2, action] of [["\u25B6 START", "REVIEW_START"], ["\u23F8 PAUSE", "REVIEW_PAUSE"], ["\u25B6 RESUME", "REVIEW_RESUME"], ["\u23F9 STOP", "REVIEW_STOP"]]) {
+        const button = this.button(label2, () => this.run(action, { moduleId: this.modules.value }));
+        button.dataset.action = action;
+        controls.append(button);
+        this.controls[action] = button;
+      }
+      this.position = el("p", "review-position", "Current Slide: ? / ?");
+      this.countdown = el("p", "review-countdown", "Next Slide In: \u2014");
+      this.status = el("p", "review-status", "Status: Stopped");
+      this.status.setAttribute("aria-live", "polite");
+      this.reason = el("p", "review-hint");
+      this.content = el("pre", "review-content", "B\u1EA5m START \u0111\u1EC3 xem n\u1ED9i dung \u0111\xE3 tr\xEDch xu\u1EA5t.");
+      this.host.append(this.position, this.countdown, this.status, this.reason, this.content);
+      this.update(null);
+    }
+    button(label, operation) {
+      const button = this.doc.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.addEventListener("click", operation, { signal: this.events.signal });
+      return button;
+    }
+    async run(action, args) {
+      try {
+        await this.command(action, args);
+      } catch (error2) {
+        this.reason.textContent = error2.message;
+      }
+    }
+    update(review, { modules } = {}) {
+      this.review = review;
+      if (modules) {
+        const selected = this.modules.value;
+        this.modules.replaceChildren();
+        for (const module of modules) {
+          const option = this.doc.createElement("option");
+          option.value = module.id;
+          option.textContent = module.title;
+          this.modules.append(option);
+        }
+        if (modules.some((module) => module.id === selected)) this.modules.value = selected;
+        else if (modules.some((module) => module.id === review?.moduleId)) this.modules.value = review.moduleId;
+        this.modules.disabled = review?.mode === "reviewing";
+      }
+      const interval = review?.intervalMs || 3e3;
+      for (const button of this.presets) button.setAttribute("aria-pressed", String(+button.dataset.interval === interval));
+      if (this.doc.activeElement !== this.custom && this.custom.getRootNode().activeElement !== this.custom) this.custom.value = String(interval / 1e3);
+      const labels = { reviewing: "Reviewing", paused: "Paused", blocked: "Stopped \xB7 Missing content", completed: "Stopped \xB7 Last slide", stopped: "Stopped" };
+      this.status.textContent = `Status: ${labels[review?.mode] || "Stopped"}`;
+      this.position.textContent = `Current Slide: ${review?.currentSlide ?? "?"} / ${review?.totalSlides ?? "?"}`;
+      this.reason.textContent = review?.reason || "\u0110\u1ECDc slide hi\u1EC7n t\u1EA1i ho\u1EB7c ch\u1ECDn module c\xF3 n\u1ED9i dung \u0111\xE3 l\u01B0u.";
+      const item = review?.item;
+      this.content.textContent = item ? [item.moduleTitle, item.content, item.transcript && `\u5206\u9875\u8BB2\u7A3F
+${item.transcript}`, item.explanations].filter(Boolean).join("\n\n") : "Ch\u01B0a c\xF3 n\u1ED9i dung trong tr\xECnh xem nhanh.";
+      this.controls.REVIEW_PAUSE.disabled = review?.mode !== "reviewing";
+      this.controls.REVIEW_RESUME.disabled = !["paused", "blocked"].includes(review?.mode);
+      this.controls.REVIEW_START.disabled = review?.mode === "reviewing";
+      this.controls.REVIEW_STOP.disabled = !review?.moduleId || review.mode === "stopped";
+      this.tick();
+    }
+    tick(now = Date.now()) {
+      const review = this.review;
+      const remaining = review?.mode === "reviewing" ? Math.max(0, (review.deadline || now) - now) : review?.remainingMs;
+      this.countdown.textContent = `Next Slide In: ${["reviewing", "paused"].includes(review?.mode) ? `${((remaining || 0) / 1e3).toFixed(1)}s` : "\u2014"}`;
+    }
+    destroy() {
+      this.events.abort();
+      this.host.remove();
+    }
+  };
+
   // src/popup/popup.js
   var api = extensionAPI();
   var $ = (id) => document.getElementById(id);
@@ -87,6 +212,8 @@
   var data;
   var pending = false;
   var storageTimer;
+  var reviewPanel = new ReviewPanel($("review-container"), (action, args) => command(action, args));
+  var countdownTimer = setInterval(() => reviewPanel.tick(), 100);
   var MODE = { running: "\u0110ang h\u1ED7 tr\u1EE3", paused: "T\u1EA1m d\u1EEBng", stopped: "\u0110\xE3 d\u1EEBng" };
   var pair = (value) => value ? `${value.completed} / ${value.total}` : "Ch\u01B0a x\xE1c minh";
   function error(message) {
@@ -145,6 +272,9 @@
     $("fast-mode").checked = status.preferences.fastMode;
     $("auto-capture").checked = status.preferences.autoCapture;
     $("profile").textContent = data.profile.startsWith("account:") ? "\u0110\xE3 nh\u1EADn di\u1EC7n t\xE0i kho\u1EA3n qua d\u1EA5u hi\u1EC7u UI; ch\u1EC9 l\u01B0u m\xE3 b\u0103m c\u1EE5c b\u1ED9." : `H\u1ED3 s\u01A1: ${data.profile.replace(/^local:/, "")}`;
+    $("profile-notice").hidden = data.profile !== "local:default";
+    $("profile-notice").textContent = "Ghi ch\xFA \u0111ang l\u01B0u trong h\u1ED3 s\u01A1 c\u1EE5c b\u1ED9 m\u1EB7c \u0111\u1ECBnh. \u0110\xE2y kh\xF4ng ph\u1EA3i y\xEAu c\u1EA7u \u0111\u0103ng nh\u1EADp. \u0110\u1ED5i h\u1ED3 s\u01A1 trong C\xE0i \u0111\u1EB7t khi \u0111\u1ED5i t\xE0i kho\u1EA3n MAIC.";
+    reviewPanel.update(status.review || data.review, { modules: savedReviewModules(data.slides, status.slide) });
     const progress = latestProgress();
     $("official").textContent = pair(progress.modules?.value);
     $("progress-list").replaceChildren();
@@ -277,6 +407,7 @@
     if (storageTimer || !update && !Object.keys(changes).some((key) => key.startsWith(`data:${data?.profile}:`))) return;
     storageTimer = setTimeout(async () => {
       storageTimer = null;
+      reviewPanel.update(status.review || data?.review);
       if (document.activeElement?.matches("input,textarea,select")) return;
       try {
         await refreshData();
@@ -286,5 +417,9 @@
       }
     }, 150);
   });
-  window.addEventListener("unload", () => clearTimeout(storageTimer));
+  window.addEventListener("unload", () => {
+    clearTimeout(storageTimer);
+    clearInterval(countdownTimer);
+    reviewPanel.destroy();
+  });
 })();

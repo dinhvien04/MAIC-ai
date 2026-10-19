@@ -1,4 +1,5 @@
 import styles from './overlay.css';
+import { ReviewPanel } from '../ui/review-panel.js';
 export class Overlay {
   constructor(doc, command) { this.doc = doc; this.command = command; }
   mount() {
@@ -17,6 +18,7 @@ export class Overlay {
     this.status = this.doc.createElement('p'); this.status.className = 'status'; this.status.setAttribute('aria-live', 'polite'); this.body.append(this.status);
     const actions = this.doc.createElement('div'); actions.className = 'buttons'; this.body.append(actions);
     for (const [label, action] of [['← Trước', 'PREVIOUS'], ['Sau →', 'NEXT'], ['Ghi chú', 'NOTES'], ['Tạm dừng', 'PAUSE'], ['Tiếp tục', 'RESUME'], ['Dừng', 'STOP']]) actions.append(this.button(label, () => this.command(action)));
+    this.reviewPanel = new ReviewPanel(this.body, (action, args) => this.command(action, args));
     let drag;
     const signal = this.events.signal;
     header.addEventListener('pointerdown', event => {
@@ -39,5 +41,6 @@ export class Overlay {
     return button;
   }
   update(slide, reason) { this.count.textContent = `${slide?.slideNumber ?? '?'} / ${slide?.totalSlides ?? '?'}`; this.status.textContent = reason; }
-  remove() { this.events?.abort(); this.host?.remove(); this.host = null; }
+  updateReview(review, modules) { this.reviewPanel?.update(review, { modules }); }
+  remove() { this.events?.abort(); this.reviewPanel?.destroy(); this.reviewPanel = null; this.host?.remove(); this.host = null; }
 }
